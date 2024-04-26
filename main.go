@@ -235,7 +235,7 @@ func main() {
 	}
 
 	if er != nil {
-		panic(fmt.Errorf("error creating cluster object : %v", err))
+		panic(fmt.Errorf("error creating cluster object : %v", er))
 	}
 	bucket := cluster.Bucket(bucketName)
 
