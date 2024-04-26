@@ -185,6 +185,7 @@ func main() {
 	//new additions
 	var datasetName string
 	var xattrFlag bool
+	var capella bool
 	// var vectorCategory string
 
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
@@ -198,6 +199,7 @@ func main() {
 	flag.IntVar(&startIndex, "startIndex", 0, "startIndex")
 	flag.IntVar(&endIndex, "endIndex", 50, "endIndex")
 	flag.IntVar(&batchSize, "batchSize", 100, "batchSize")
+	flag.BoolVar(&capella, "capella", false, "pushing docs to capella?")
 	//new additions
 	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
 	flag.BoolVar(&xattrFlag, "xattrFlag", true, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
@@ -206,19 +208,38 @@ func main() {
 	fmt.Printf("Dataset Name: %s\n", datasetName)
 
 	// Initialize the Connection
-	cluster, err := gocb.Connect("couchbase://"+nodeAddress, gocb.ClusterOptions{
-		Authenticator: gocb.PasswordAuthenticator{
-			Username: username,
-			Password: password,
-		},
-	})
+	var cluster *gocb.Cluster
+	var er error
+	if capella {
+		options := gocb.ClusterOptions{
+			Authenticator: gocb.PasswordAuthenticator{
+				Username: username,
+				Password: password,
+			},
+			SecurityConfig: gocb.SecurityConfig{
+				TLSSkipVerify: true,
+			},
+		}
+		if err := options.ApplyProfile(gocb.
+			ClusterConfigProfileWanDevelopment); err != nil {
+			log.Fatal(err)
+		}
+		cluster, er = gocb.Connect(nodeAddress, options)
+	} else {
+		cluster, er = gocb.Connect("couchbase://"+nodeAddress, gocb.ClusterOptions{
+			Authenticator: gocb.PasswordAuthenticator{
+				Username: username,
+				Password: password,
+			},
+		})
+	}
 
-	if err != nil {
+	if er != nil {
 		panic(fmt.Errorf("error creating cluster object : %v", err))
 	}
 	bucket := cluster.Bucket(bucketName)
 
-	err = bucket.WaitUntilReady(15*time.Second, nil)
+	err := bucket.WaitUntilReady(15*time.Second, nil)
 	if err != nil {
 		panic(err)
 	}
