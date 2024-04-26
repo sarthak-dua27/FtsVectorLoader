@@ -1,45 +1,43 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"encoding/binary"
-	"flag"
-	"sync"
-	"time"
-	"github.com/couchbase/gocb/v2"
-	"io"
-	"os/exec"
 	"archive/tar"
 	"compress/gzip"
+	"encoding/base64"
+	"encoding/binary"
+	"flag"
+	"fmt"
+	"github.com/couchbase/gocb/v2"
+	"github.com/go-faker/faker/v4"
+	"io"
+	"log"
+	"math"
 	"math/rand"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
-	"github.com/go-faker/faker/v4"
-	"log"
-	"encoding/base64"
-	"math"
+	"sync"
+	"time"
 	"unsafe"
 )
 
 func floatsToLittleEndianBytes(floats []float32) []byte {
-    byteSlice := make([]byte, len(floats)*4)
-    for i, num := range floats {
-        bits := math.Float32bits(num)
-        *(*uint32)(unsafe.Pointer(&byteSlice[i*4])) = bits
-    }
-    return byteSlice
+	byteSlice := make([]byte, len(floats)*4)
+	for i, num := range floats {
+		bits := math.Float32bits(num)
+		*(*uint32)(unsafe.Pointer(&byteSlice[i*4])) = bits
+	}
+	return byteSlice
 }
-
 
 func datasetExists(filePath string) bool {
-    // Check if the file exists
-    _, err := os.Stat(filePath)
-    return !os.IsNotExist(err)
+	// Check if the file exists
+	_, err := os.Stat(filePath)
+	return !os.IsNotExist(err)
 }
 
-
-func extractDataset(source string){
+func extractDataset(source string) {
 
 	// Destination directory where the contents will be extracted
 	destination := "source/"
@@ -109,25 +107,25 @@ func extractDataset(source string){
 	fmt.Println("Files extracted successfully!")
 }
 
-func downloadDataset(url string, datasetName string){
+func downloadDataset(url string, datasetName string) {
 	saveName := datasetName + ".tar.gz"
-    // Destination file path
-    destination := "raw/" + saveName
-    // Execute wget command
-    cmd := exec.Command("wget", "-O", destination, url)
-    output, err := cmd.CombinedOutput()
-    if err != nil {
-        fmt.Println("Error:", err)
-        return
-    }
-    // Print wget command output
-    fmt.Println(string(output))
-    fmt.Println("File downloaded successfully!")
+	// Destination file path
+	destination := "raw/" + saveName
+	// Execute wget command
+	cmd := exec.Command("wget", "-O", destination, url)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	// Print wget command output
+	fmt.Println(string(output))
+	fmt.Println("File downloaded successfully!")
 	extractDataset(destination)
 }
 
 func readVectorsFromFile(filepath string) ([][]float32, error) {
-	
+
 	// Open the file for reading
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -135,7 +133,6 @@ func readVectorsFromFile(filepath string) ([][]float32, error) {
 	}
 	defer file.Close()
 
-	
 	// Read the dimension of the vector type
 	var dimension int32
 	err = binary.Read(file, binary.LittleEndian, &dimension)
@@ -186,7 +183,6 @@ func readVectorsFromFile(filepath string) ([][]float32, error) {
 
 	return outVector, nil
 }
-
 
 func resizeVectors(trainVecs [][]float32, percentages []float32, dims []int) error {
 	totalVectors := len(trainVecs)
@@ -241,8 +237,8 @@ func repeatValues(vector []float32, targetDim int) []float32 {
 	return repeatedValues[:targetDim]
 }
 
-func main()  {
-	
+func main() {
+
 	var nodeAddress string
 	var bucketName string
 	var scopeName string
@@ -265,9 +261,7 @@ func main()  {
 	var intListStr string
 	var base64Flag bool
 	var capella bool
-	// var vectorCategory string 
-	
-
+	// var vectorCategory string
 
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
 	flag.StringVar(&bucketName, "bucketName", "", "Bucket name")
@@ -283,38 +277,13 @@ func main()  {
 	flag.BoolVar(&capella, "capella", false, "pushing docs to capella?")
 	//new additions
 	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
-	flag.BoolVar(&xattrFlag,"xattrFlag",true,"xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
+	flag.BoolVar(&xattrFlag, "xattrFlag", true, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
 	flag.StringVar(&floatListStr, "percentagesToResize", "", "Comma-separated list of float32 values")
 	flag.StringVar(&intListStr, "dimensionsForResize", "", "Comma-separated list of int values")
-	flag.BoolVar(&base64Flag,"base64Flag",false,"true results in, embeddings get uploaded as base64 strings")
+	flag.BoolVar(&base64Flag, "base64Flag", false, "true results in, embeddings get uploaded as base64 strings")
 	// flag.StringVar(&vectorCategory, "vectorCategory", "learn", "Available categories are learn, base, groundtruth and query")
 
 	flag.Parse()
-
-
-
-	// connectionString := "couchbases://cb.us-mkjdqvlcpxghs.nonprod-project-avengers.com"
-	// Initialize the Connection
-	// cluster, err := gocb.Connect(connectionString, gocb.ClusterOptions{
-	// 	Authenticator: gocb.PasswordAuthenticator{
-	// 		Username: username,
-	// 		Password: password,
-	// 	},
-	// })
-
-	// if err != nil {
-	// 	panic(fmt.Errorf("error creating cluster object : %v", err))
-	// }
-	// bucket := cluster.Bucket(bucketName)
-
-	// err = bucket.WaitUntilReady(15*time.Second, nil)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// collection := bucket.Scope(scopeName).Collection(collectionName)
-	// collection := bucket.DefaultCollection()
-
-
 
 	var cluster *gocb.Cluster
 	var er error
@@ -356,9 +325,6 @@ func main()  {
 
 	collection := scope.Collection(collectionName)
 
-
-
-
 	if floatListStr != "" {
 		// isResize = true
 
@@ -393,21 +359,17 @@ func main()  {
 
 	}
 
-
 	//dataset downloading and extraction
 	baseUrl := "ftp://ftp.irisa.fr/local/texmex/corpus/"
 	datasetUrl := baseUrl + datasetName + ".tar.gz"
 
-
 	// Check if the dataset file already exists in the "raw/" folder
-    if datasetExists("raw/" + datasetName + ".tar.gz") {
-        fmt.Println("Dataset file already exists. Skipping download.")
-    } else {
+	if datasetExists("raw/" + datasetName + ".tar.gz") {
+		fmt.Println("Dataset file already exists. Skipping download.")
+	} else {
 		fmt.Println("Downloading the dataset")
-        downloadDataset(datasetUrl, datasetName)
-    }
-
-
+		downloadDataset(datasetUrl, datasetName)
+	}
 
 	var learn_vecs string = "source/" + datasetName + "/" + datasetName + "_base.fvecs"
 
@@ -417,17 +379,15 @@ func main()  {
 		return
 	}
 
-
-	if floatListStr != ""{
-		resizeVectors(vectors,percentagesToResize,dimensionsForResize)
+	if floatListStr != "" {
+		resizeVectors(vectors, percentagesToResize, dimensionsForResize)
 	}
-
 
 	var encodedVectors []string
 	if base64Flag {
 		for _, vector := range vectors {
 			byteSlice := floatsToLittleEndianBytes(vector)
-   			base64String := base64.StdEncoding.EncodeToString(byteSlice)
+			base64String := base64.StdEncoding.EncodeToString(byteSlice)
 			encodedVectors = append(encodedVectors, base64String)
 		}
 	}
@@ -443,23 +403,23 @@ func main()  {
 			if xattrFlag {
 				if base64Flag {
 					vectArr := encodedVectors[j]
-					go updateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,j)
+					go updateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
 				} else {
 					vectArr := vectors[j]
-					go updateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,j)
+					go updateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr, j)
 				}
-				
-			}else{
+
+			} else {
 				if base64Flag {
 					vectArr := encodedVectors[j]
-					go updateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,j)
+					go updateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
 				} else {
 					vectArr := vectors[j]
-					go updateDocumentsField(&wg,collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,bucket,j)
-				}	
-				
+					go updateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
+				}
+
 			}
-			
+
 		}
 		wg.Wait()
 		startIndex = end
@@ -467,26 +427,26 @@ func main()  {
 }
 
 // waitGroup *sync.WaitGroup
-func updateDocumentsXattr(waitGroup *sync.WaitGroup,collection *gocb.Collection, documentID string, vectorData []float32, ind int) {
+func updateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32, ind int) {
 	defer waitGroup.Done()
 
 	type Data struct {
-		Sno      int   `json:"sno"`
-		Sname     string   `json:"sname"`
-		Id string `json:"id"`
+		Sno   int    `json:"sno"`
+		Sname string `json:"sname"`
+		Id    string `json:"id"`
 	}
 
-
 	for i := 0; i < 3; i++ {
-		var _, err = collection.Upsert(documentID ,
-		Data{
-			Sno : ind, 
-			Sname : faker.Name(),
-			Id  : documentID,
-		}, nil)
+		var _, err = collection.Upsert(documentID,
+			Data{
+				Sno:   ind,
+				Sname: faker.Name(),
+				Id:    documentID,
+			}, nil)
 		if err != nil {
 			log.Fatal(err)
 		} else {
+			fmt.Println(documentID)
 			var _, errr = collection.MutateIn(documentID, []gocb.MutateInSpec{
 				gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{
 					CreatePath: true,
@@ -496,7 +456,7 @@ func updateDocumentsXattr(waitGroup *sync.WaitGroup,collection *gocb.Collection,
 				nil,
 			)
 			if errr != nil {
-				fmt.Printf("Error mutating document %v : %v Retrying\n",documentID, errr)
+				fmt.Printf("Error mutating document %v : %v Retrying\n", documentID, errr)
 			} else {
 				// fmt.Println("Done")
 				fmt.Printf("xattrs of the document ID %v got updated\n", documentID)
@@ -507,8 +467,7 @@ func updateDocumentsXattr(waitGroup *sync.WaitGroup,collection *gocb.Collection,
 	}
 }
 
-
-func updateDocumentsField(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32, bucket *gocb.Bucket, ind int) {
+func updateDocumentsField(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32) {
 	defer waitGroup.Done()
 
 	for i := 0; i < 3; i++ {
@@ -521,15 +480,13 @@ func updateDocumentsField(waitGroup *sync.WaitGroup, collection *gocb.Collection
 		if err != nil {
 			panic(err)
 		} else {
-			fmt.Printf("document ID %v got updated\n",documentID)
+			fmt.Printf("document ID %v got updated\n", documentID)
 		}
 	}
 }
 
-
-
 // waitGroup *sync.WaitGroup
-func updateDocumentsXattrbase64(waitGroup *sync.WaitGroup,collection *gocb.Collection, documentID string, vectorData string, ind int) {
+func updateDocumentsXattrbase64(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData string) {
 	defer waitGroup.Done()
 
 	for i := 0; i < 3; i++ {
@@ -548,7 +505,7 @@ func updateDocumentsXattrbase64(waitGroup *sync.WaitGroup,collection *gocb.Colle
 	}
 }
 
-func updateDocumentsXattrbase64field(waitGroup *sync.WaitGroup,collection *gocb.Collection, documentID string, vectorData string, ind int) {
+func updateDocumentsXattrbase64field(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData string) {
 	defer waitGroup.Done()
 
 	for i := 0; i < 3; i++ {
