@@ -2,7 +2,10 @@ module main
 
 go 1.21.6
 
-require github.com/couchbase/gocb/v2 v2.8.1
+require (
+	github.com/couchbase/gocb/v2 v2.8.1
+	github.com/go-faker/faker/v4 v4.4.1
+)
 
 require (
 	github.com/couchbase/gocbcore/v10 v10.4.1 // indirect

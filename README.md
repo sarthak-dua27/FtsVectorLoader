@@ -1,2 +1,0 @@
-# FtsVectorLoader
-# FtsVectorLoader

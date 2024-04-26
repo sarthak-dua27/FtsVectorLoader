@@ -12,7 +12,24 @@ import (
 	"os/exec"
 	"archive/tar"
 	"compress/gzip"
+	"math/rand"
+	"strconv"
+	"strings"
+	"github.com/go-faker/faker/v4"
+	"log"
+	"encoding/base64"
+	"math"
+	"unsafe"
 )
+
+func floatsToLittleEndianBytes(floats []float32) []byte {
+    byteSlice := make([]byte, len(floats)*4)
+    for i, num := range floats {
+        bits := math.Float32bits(num)
+        *(*uint32)(unsafe.Pointer(&byteSlice[i*4])) = bits
+    }
+    return byteSlice
+}
 
 
 func datasetExists(filePath string) bool {
@@ -171,10 +188,64 @@ func readVectorsFromFile(filepath string) ([][]float32, error) {
 }
 
 
+func resizeVectors(trainVecs [][]float32, percentages []float32, dims []int) error {
+	totalVectors := len(trainVecs)
+
+	// Get random indices for vectors to resize
+	indicesToResize := rand.Perm(totalVectors)
+
+	if len(percentages) != len(dims) {
+		return fmt.Errorf("percentages and dims lists must have the same length")
+	}
+
+	var totalPercentage float32
+	for _, per := range percentages {
+		totalPercentage += per
+	}
+
+	if totalPercentage > 1 {
+		return fmt.Errorf("total percentage of docs to update should be less than 1")
+	}
+
+	for idx, percentage := range percentages {
+		vectorsToResize := int(percentage * float32(totalVectors))
+
+		currentIndices := indicesToResize[:vectorsToResize]
+		indicesToResize = indicesToResize[vectorsToResize:]
+
+		fmt.Printf("Number of docs resized with dimension %d is %d\n", dims[idx], len(currentIndices))
+
+		for _, index := range currentIndices {
+			vector := trainVecs[index]
+			currentDim := len(vector)
+
+			// Resize the vector to the desired dimension
+			if currentDim < dims[idx] {
+				// If the current dimension is less than the desired dimension, repeat the values
+				trainVecs[index] = repeatValues(vector, dims[idx])
+			} else if currentDim > dims[idx] {
+				// If the current dimension is greater than the desired dimension, truncate the vector
+				trainVecs[index] = vector[:dims[idx]]
+			}
+		}
+	}
+
+	return nil
+}
+
+func repeatValues(vector []float32, targetDim int) []float32 {
+	repeatedValues := make([]float32, 0, targetDim)
+	for i := 0; i < (targetDim+len(vector)-1)/len(vector); i++ {
+		repeatedValues = append(repeatedValues, vector...)
+	}
+	return repeatedValues[:targetDim]
+}
+
 func main()  {
 	
 	var nodeAddress string
 	var bucketName string
+	var scopeName string
 	var username string
 	var password string
 	var fieldName string
@@ -183,14 +254,24 @@ func main()  {
 	var startIndex int
 	var endIndex int
 	var batchSize int
+
 	//new additions
 	var datasetName string
 	var xattrFlag bool
+
+	var percentagesToResize []float32
+	var dimensionsForResize []int
+	var floatListStr string
+	var intListStr string
+	var base64Flag bool
+	var capella bool
 	// var vectorCategory string 
 	
 
+
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
 	flag.StringVar(&bucketName, "bucketName", "", "Bucket name")
+	flag.StringVar(&scopeName, "scopeName", "", "Scope name")
 	flag.StringVar(&collectionName, "collectionName", "_default", "Collection name")
 	flag.StringVar(&username, "username", "", "username")
 	flag.StringVar(&password, "password", "", "password")
@@ -198,32 +279,119 @@ func main()  {
 	flag.StringVar(&documentIdPrefix, "documentIdPrefix", "", "documentIdPrefix")
 	flag.IntVar(&startIndex, "startIndex", 0, "startIndex")
 	flag.IntVar(&endIndex, "endIndex", 50, "endIndex")
-	flag.IntVar(&batchSize, "batchSize", 100, "batchSize")
+	flag.IntVar(&batchSize, "batchSize", 600, "batchSize")
+	flag.BoolVar(&capella, "capella", false, "pushing docs to capella?")
 	//new additions
 	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
 	flag.BoolVar(&xattrFlag,"xattrFlag",true,"xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
+	flag.StringVar(&floatListStr, "percentagesToResize", "", "Comma-separated list of float32 values")
+	flag.StringVar(&intListStr, "dimensionsForResize", "", "Comma-separated list of int values")
+	flag.BoolVar(&base64Flag,"base64Flag",false,"true results in, embeddings get uploaded as base64 strings")
 	// flag.StringVar(&vectorCategory, "vectorCategory", "learn", "Available categories are learn, base, groundtruth and query")
 
 	flag.Parse()
-	// Initialize the Connection
-	cluster, err := gocb.Connect("couchbase://"+nodeAddress, gocb.ClusterOptions{
-		Authenticator: gocb.PasswordAuthenticator{
-			Username: username,
-			Password: password,
-		},
-	})
 
-	if err != nil {
-		panic(fmt.Errorf("error creating cluster object : %v", err))
+
+
+	// connectionString := "couchbases://cb.us-mkjdqvlcpxghs.nonprod-project-avengers.com"
+	// Initialize the Connection
+	// cluster, err := gocb.Connect(connectionString, gocb.ClusterOptions{
+	// 	Authenticator: gocb.PasswordAuthenticator{
+	// 		Username: username,
+	// 		Password: password,
+	// 	},
+	// })
+
+	// if err != nil {
+	// 	panic(fmt.Errorf("error creating cluster object : %v", err))
+	// }
+	// bucket := cluster.Bucket(bucketName)
+
+	// err = bucket.WaitUntilReady(15*time.Second, nil)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// collection := bucket.Scope(scopeName).Collection(collectionName)
+	// collection := bucket.DefaultCollection()
+
+
+
+	var cluster *gocb.Cluster
+	var er error
+	if capella {
+		options := gocb.ClusterOptions{
+			Authenticator: gocb.PasswordAuthenticator{
+				Username: username,
+				Password: password,
+			},
+			SecurityConfig: gocb.SecurityConfig{
+				TLSSkipVerify: true,
+			},
+		}
+		if err := options.ApplyProfile(gocb.
+			ClusterConfigProfileWanDevelopment); err != nil {
+			log.Fatal(err)
+		}
+		cluster, er = gocb.Connect(nodeAddress, options)
+	} else {
+		cluster, er = gocb.Connect("couchbase://"+nodeAddress, gocb.ClusterOptions{
+			Authenticator: gocb.PasswordAuthenticator{
+				Username: username,
+				Password: password,
+			},
+		})
+	}
+
+	if er != nil {
+		panic(fmt.Errorf("error creating cluster object : %v", er))
 	}
 	bucket := cluster.Bucket(bucketName)
 
-	err = bucket.WaitUntilReady(15*time.Second, nil)
+	err := bucket.WaitUntilReady(15*time.Second, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	collection := bucket.DefaultCollection()
+	scope := bucket.Scope(scopeName)
+
+	collection := scope.Collection(collectionName)
+
+
+
+
+	if floatListStr != "" {
+		// isResize = true
+
+		var floatList []float32
+
+		floatStrList := strings.Split(floatListStr, ",")
+		for _, floatStr := range floatStrList {
+			floatVal, err := strconv.ParseFloat(floatStr, 32)
+			if err != nil {
+				fmt.Printf("Error parsing float value: %v\n", err)
+				return
+			}
+			floatList = append(floatList, float32(floatVal))
+		}
+		percentagesToResize = floatList
+
+		var intList []int
+		intStrList := strings.Split(intListStr, ",")
+		for _, intStr := range intStrList {
+			intVal, err := strconv.Atoi(intStr)
+			if err != nil {
+				fmt.Printf("Error parsing integer value: %v\n", err)
+				return
+			}
+			intList = append(intList, intVal)
+		}
+
+		dimensionsForResize = intList
+
+		fmt.Println(dimensionsForResize)
+		fmt.Println(percentagesToResize)
+
+	}
 
 
 	//dataset downloading and extraction
@@ -235,12 +403,13 @@ func main()  {
     if datasetExists("raw/" + datasetName + ".tar.gz") {
         fmt.Println("Dataset file already exists. Skipping download.")
     } else {
+		fmt.Println("Downloading the dataset")
         downloadDataset(datasetUrl, datasetName)
     }
 
 
 
-	var learn_vecs string = "source/" + datasetName + "/" + datasetName + "_learn.fvecs"
+	var learn_vecs string = "source/" + datasetName + "/" + datasetName + "_base.fvecs"
 
 	vectors, err := readVectorsFromFile(learn_vecs)
 	if err != nil {
@@ -248,9 +417,20 @@ func main()  {
 		return
 	}
 
-	//printing a sample value from the output vectors
-	fmt.Println("Sample Vector read from output vector list:", vectors[0])
 
+	if floatListStr != ""{
+		resizeVectors(vectors,percentagesToResize,dimensionsForResize)
+	}
+
+
+	var encodedVectors []string
+	if base64Flag {
+		for _, vector := range vectors {
+			byteSlice := floatsToLittleEndianBytes(vector)
+   			base64String := base64.StdEncoding.EncodeToString(byteSlice)
+			encodedVectors = append(encodedVectors, base64String)
+		}
+	}
 
 	var wg sync.WaitGroup
 	for startIndex != endIndex {
@@ -260,11 +440,24 @@ func main()  {
 		}
 		wg.Add(end - startIndex)
 		for j := startIndex; j < end; j++ {
-			vectArr := vectors[j]
 			if xattrFlag {
-				go updateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
+				if base64Flag {
+					vectArr := encodedVectors[j]
+					go updateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,j)
+				} else {
+					vectArr := vectors[j]
+					go updateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,j)
+				}
+				
 			}else{
-				go updateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,bucket)
+				if base64Flag {
+					vectArr := encodedVectors[j]
+					go updateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,j)
+				} else {
+					vectArr := vectors[j]
+					go updateDocumentsField(&wg,collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,bucket,j)
+				}	
+				
 			}
 			
 		}
@@ -273,33 +466,94 @@ func main()  {
 	}
 }
 
-
-func updateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32) {
+// waitGroup *sync.WaitGroup
+func updateDocumentsXattr(waitGroup *sync.WaitGroup,collection *gocb.Collection, documentID string, vectorData []float32, ind int) {
 	defer waitGroup.Done()
+
+	type Data struct {
+		Sno      int   `json:"sno"`
+		Sname     string   `json:"sname"`
+		Id string `json:"id"`
+	}
+
+
 	for i := 0; i < 3; i++ {
-		_, err := collection.MutateIn(documentID, []gocb.MutateInSpec{
-			gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{
-				CreatePath: true,
-				IsXattr:    true,
-			}),
-		},
-			nil,
-		)
+		var _, err = collection.Upsert(documentID ,
+		Data{
+			Sno : ind, 
+			Sname : faker.Name(),
+			Id  : documentID,
+		}, nil)
 		if err != nil {
-			fmt.Printf("Error mutating document: %v Retrying\n", err)
+			log.Fatal(err)
 		} else {
-			fmt.Println("Done")
-			break
+			var _, errr = collection.MutateIn(documentID, []gocb.MutateInSpec{
+				gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{
+					CreatePath: true,
+					IsXattr:    true,
+				}),
+			},
+				nil,
+			)
+			if errr != nil {
+				fmt.Printf("Error mutating document %v : %v Retrying\n",documentID, errr)
+			} else {
+				// fmt.Println("Done")
+				fmt.Printf("xattrs of the document ID %v got updated\n", documentID)
+				break
+			}
+		}
+
+	}
+}
+
+
+func updateDocumentsField(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32, bucket *gocb.Bucket, ind int) {
+	defer waitGroup.Done()
+
+	for i := 0; i < 3; i++ {
+		mops := []gocb.MutateInSpec{
+			gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{}),
+		}
+		_, err := collection.MutateIn(documentID, mops, &gocb.MutateInOptions{
+			Timeout: 10050 * time.Millisecond,
+		})
+		if err != nil {
+			panic(err)
+		} else {
+			fmt.Printf("document ID %v got updated\n",documentID)
 		}
 	}
 }
 
 
-func updateDocumentsField(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32, bucket *gocb.Bucket) {
+
+// waitGroup *sync.WaitGroup
+func updateDocumentsXattrbase64(waitGroup *sync.WaitGroup,collection *gocb.Collection, documentID string, vectorData string, ind int) {
 	defer waitGroup.Done()
+
 	for i := 0; i < 3; i++ {
 		mops := []gocb.MutateInSpec{
-			gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{}),
+			gocb.UpsertSpec("vector_data_base64", vectorData, &gocb.UpsertSpecOptions{
+				CreatePath: true,
+				IsXattr:    true,
+			}),
+		}
+		_, err := collection.MutateIn(documentID, mops, &gocb.MutateInOptions{
+			Timeout: 10050 * time.Millisecond,
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func updateDocumentsXattrbase64field(waitGroup *sync.WaitGroup,collection *gocb.Collection, documentID string, vectorData string, ind int) {
+	defer waitGroup.Done()
+
+	for i := 0; i < 3; i++ {
+		mops := []gocb.MutateInSpec{
+			gocb.UpsertSpec("vector_data_base64", vectorData, &gocb.UpsertSpecOptions{}),
 		}
 		_, err := collection.MutateIn(documentID, mops, &gocb.MutateInOptions{
 			Timeout: 10050 * time.Millisecond,
