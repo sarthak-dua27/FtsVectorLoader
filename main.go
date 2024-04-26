@@ -1,28 +1,27 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"encoding/binary"
-	"flag"
-	"sync"
-	"time"
-	"github.com/couchbase/gocb/v2"
-	"io"
-	"os/exec"
 	"archive/tar"
 	"compress/gzip"
+	"encoding/binary"
+	"flag"
+	"fmt"
+	"github.com/couchbase/gocb/v2"
+	"io"
+	"log"
+	"os"
+	"os/exec"
+	"sync"
+	"time"
 )
 
-
 func datasetExists(filePath string) bool {
-    // Check if the file exists
-    _, err := os.Stat(filePath)
-    return !os.IsNotExist(err)
+	// Check if the file exists
+	_, err := os.Stat(filePath)
+	return !os.IsNotExist(err)
 }
 
-
-func extractDataset(source string){
+func extractDataset(source string) {
 
 	// Destination directory where the contents will be extracted
 	destination := "source/"
@@ -92,25 +91,26 @@ func extractDataset(source string){
 	fmt.Println("Files extracted successfully!")
 }
 
-func downloadDataset(url string, datasetName string){
+func downloadDataset(url string, datasetName string) error {
 	saveName := datasetName + ".tar.gz"
-    // Destination file path
-    destination := "raw/" + saveName
-    // Execute wget command
-    cmd := exec.Command("wget", "-O", destination, url)
-    output, err := cmd.CombinedOutput()
-    if err != nil {
-        fmt.Println("Error:", err)
-        return
-    }
-    // Print wget command output
-    fmt.Println(string(output))
-    fmt.Println("File downloaded successfully!")
+	// Destination file path
+	destination := "raw/" + saveName
+	log.Printf("Executing command wget -O %s %s\n", destination, url)
+	// Execute wget command
+	cmd := exec.Command("wget", "-O", destination, url)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+	// Print wget command output
+	fmt.Println(string(output))
+	fmt.Println("File downloaded successfully!")
 	extractDataset(destination)
+	return nil
 }
 
 func readVectorsFromFile(filepath string) ([][]float32, error) {
-	
+
 	// Open the file for reading
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -118,7 +118,6 @@ func readVectorsFromFile(filepath string) ([][]float32, error) {
 	}
 	defer file.Close()
 
-	
 	// Read the dimension of the vector type
 	var dimension int32
 	err = binary.Read(file, binary.LittleEndian, &dimension)
@@ -170,14 +169,14 @@ func readVectorsFromFile(filepath string) ([][]float32, error) {
 	return outVector, nil
 }
 
+func main() {
 
-func main()  {
-	
 	var nodeAddress string
 	var bucketName string
 	var username string
 	var password string
 	var fieldName string
+	var scopeName string
 	var collectionName string
 	var documentIdPrefix string
 	var startIndex int
@@ -186,11 +185,11 @@ func main()  {
 	//new additions
 	var datasetName string
 	var xattrFlag bool
-	// var vectorCategory string 
-	
+	// var vectorCategory string
 
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
 	flag.StringVar(&bucketName, "bucketName", "", "Bucket name")
+	flag.StringVar(&scopeName, "scopeName", "_default", "Scope name")
 	flag.StringVar(&collectionName, "collectionName", "_default", "Collection name")
 	flag.StringVar(&username, "username", "", "username")
 	flag.StringVar(&password, "password", "", "password")
@@ -201,10 +200,11 @@ func main()  {
 	flag.IntVar(&batchSize, "batchSize", 100, "batchSize")
 	//new additions
 	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
-	flag.BoolVar(&xattrFlag,"xattrFlag",true,"xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
+	flag.BoolVar(&xattrFlag, "xattrFlag", true, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
 	// flag.StringVar(&vectorCategory, "vectorCategory", "learn", "Available categories are learn, base, groundtruth and query")
-
 	flag.Parse()
+	fmt.Printf("Dataset Name: %s\n", datasetName)
+
 	// Initialize the Connection
 	cluster, err := gocb.Connect("couchbase://"+nodeAddress, gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
@@ -223,23 +223,24 @@ func main()  {
 		panic(err)
 	}
 
-	collection := bucket.DefaultCollection()
+	scope := bucket.Scope(scopeName)
 
+	collection := scope.Collection(collectionName)
 
 	//dataset downloading and extraction
 	baseUrl := "ftp://ftp.irisa.fr/local/texmex/corpus/"
 	datasetUrl := baseUrl + datasetName + ".tar.gz"
 
-
 	// Check if the dataset file already exists in the "raw/" folder
-    if datasetExists("raw/" + datasetName + ".tar.gz") {
-        fmt.Println("Dataset file already exists. Skipping download.")
-    } else {
-        downloadDataset(datasetUrl, datasetName)
-    }
-
-
-
+	if datasetExists("raw/" + datasetName + ".tar.gz") {
+		log.Println("Dataset file already exists. Skipping download.")
+	} else {
+		err = downloadDataset(datasetUrl, datasetName)
+		if err != nil {
+			log.Printf("Error downloading dataset %v\n", err)
+			return
+		}
+	}
 	var learn_vecs string = "source/" + datasetName + "/" + datasetName + "_learn.fvecs"
 
 	vectors, err := readVectorsFromFile(learn_vecs)
@@ -250,7 +251,6 @@ func main()  {
 
 	//printing a sample value from the output vectors
 	fmt.Println("Sample Vector read from output vector list:", vectors[0])
-
 
 	var wg sync.WaitGroup
 	for startIndex != endIndex {
@@ -263,16 +263,15 @@ func main()  {
 			vectArr := vectors[j]
 			if xattrFlag {
 				go updateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
-			}else{
-				go updateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr,bucket)
+			} else {
+				go updateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr, bucket)
 			}
-			
+
 		}
 		wg.Wait()
 		startIndex = end
 	}
 }
-
 
 func updateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32) {
 	defer waitGroup.Done()
@@ -286,14 +285,12 @@ func updateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection
 			nil,
 		)
 		if err != nil {
-			fmt.Printf("Error mutating document: %v Retrying\n", err)
+			log.Printf("Error mutating document: %v Retrying\n", err)
 		} else {
-			fmt.Println("Done")
 			break
 		}
 	}
 }
-
 
 func updateDocumentsField(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32, bucket *gocb.Bucket) {
 	defer waitGroup.Done()
