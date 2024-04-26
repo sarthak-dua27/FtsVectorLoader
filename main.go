@@ -261,6 +261,7 @@ func main() {
 	var intListStr string
 	var base64Flag bool
 	var capella bool
+	var provideDefaultDocs bool
 	// var vectorCategory string
 
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
@@ -278,6 +279,7 @@ func main() {
 	//new additions
 	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
 	flag.BoolVar(&xattrFlag, "xattrFlag", true, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
+	flag.BoolVar(&provideDefaultDocs, "provideDefaultDocs", true, "provideDefaultDocs = true will upsert docs and then update docs for xattr (metadata)")
 	flag.StringVar(&floatListStr, "percentagesToResize", "", "Comma-separated list of float32 values")
 	flag.StringVar(&intListStr, "dimensionsForResize", "", "Comma-separated list of int values")
 	flag.BoolVar(&base64Flag, "base64Flag", false, "true results in, embeddings get uploaded as base64 strings")
@@ -406,7 +408,7 @@ func main() {
 					go updateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
 				} else {
 					vectArr := vectors[j]
-					go updateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr, j)
+					go updateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr, j, provideDefaultDocs)
 				}
 
 			} else {
@@ -426,8 +428,7 @@ func main() {
 	}
 }
 
-// waitGroup *sync.WaitGroup
-func updateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32, ind int) {
+func updateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection, documentID string, vectorData []float32, ind int, provideDefaultDocs bool) {
 	defer waitGroup.Done()
 
 	type Data struct {
@@ -437,16 +438,18 @@ func updateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection
 	}
 
 	for i := 0; i < 3; i++ {
-		var _, err = collection.Upsert(documentID,
-			Data{
-				Sno:   ind,
-				Sname: faker.Name(),
-				Id:    documentID,
-			}, nil)
-		if err != nil {
-			log.Fatal(err)
+		if provideDefaultDocs {
+			var _, err = collection.Upsert(documentID,
+				Data{
+					Sno:   ind,
+					Sname: faker.Name(),
+					Id:    documentID,
+				}, nil)
+			if err != nil {
+				log.Fatalf("Unable to upsert doc %v", err)
+				return
+			}
 		} else {
-			fmt.Println(documentID)
 			var _, errr = collection.MutateIn(documentID, []gocb.MutateInSpec{
 				gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{
 					CreatePath: true,
