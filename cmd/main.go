@@ -181,21 +181,20 @@ func main() {
 			if xattrFlag {
 				if base64Flag {
 					vectArr := encodedVectors[j]
-					go internal.UpdateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
+					go internal.UpdateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
 				} else {
 					vectArr := vectors[j]
-					go internal.UpdateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr, j, provideDefaultDocs)
+					go internal.UpdateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j, provideDefaultDocs)
 				}
 
 			} else {
 				if base64Flag {
 					vectArr := encodedVectors[j]
-					go internal.UpdateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr)
+					go internal.UpdateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
 				} else {
 					vectArr := vectors[j]
-					go internal.UpdateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j), vectArr, j)
+					go internal.UpdateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j)
 				}
-
 			}
 
 		}
