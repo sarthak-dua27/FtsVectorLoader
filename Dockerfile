@@ -1,19 +1,22 @@
-
 FROM golang:alpine AS builder
 
 RUN apk add --no-cache wget
 
 WORKDIR /app
 
-# COPY . .
-COPY . /app
+# Copy the entire project directory into the container
+COPY . .
+
+# Change directory to the cmd folder
+WORKDIR /app/cmd
+
+# Download dependencies
 RUN go mod download
 
+# Build the Go application
 RUN go build -o main .
 
-# FROM scratch
+# Switch back to the root directory
+WORKDIR /app
 
-# COPY --from=builder /app/main /app/main
-# COPY --from=builder /app ./app
-
-ENTRYPOINT ["/app/main"]
+ENTRYPOINT ["/app/cmd/main"]
