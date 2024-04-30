@@ -83,7 +83,7 @@ func UpdateDocumentsXattrbase64(waitGroup *sync.WaitGroup, collection *gocb.Coll
 
 	for i := 0; i < 3; i++ {
 		mops := []gocb.MutateInSpec{
-			gocb.UpsertSpec("vector_data_base64", vectorData, &gocb.UpsertSpecOptions{
+			gocb.UpsertSpec("vector_encoded", vectorData, &gocb.UpsertSpecOptions{
 				CreatePath: true,
 				IsXattr:    true,
 			}),
