@@ -49,7 +49,7 @@ func main() {
 	flag.IntVar(&startIndex, "startIndex", 0, "startIndex")
 	flag.IntVar(&endIndex, "endIndex", 50, "endIndex")
 	flag.IntVar(&batchSize, "batchSize", 600, "batchSize")
-	flag.BoolVar(&provideDefaultDocs, "provideDefaultDocs", true, "provideDefaultDocs = true will upsert docs and then update docs for xattr (metadata)")
+	flag.BoolVar(&provideDefaultDocs, "provideDefaultDocs", false, "provideDefaultDocs = true will upsert docs and then update docs for xattr (metadata)")
 	flag.BoolVar(&capella, "capella", false, "pushing docs to capella?")
 	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
 	flag.BoolVar(&xattrFlag, "xattrFlag", false, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
