@@ -30,22 +30,22 @@ func UpdateDocumentsXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection
 				log.Fatalf("Unable to upsert doc %v", err)
 				return
 			}
+		}
+
+		var _, errr = collection.MutateIn(documentID, []gocb.MutateInSpec{
+			gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{
+				CreatePath: true,
+				IsXattr:    true,
+			}),
+		},
+			nil,
+		)
+		if errr != nil {
+			fmt.Printf("Error mutating document %v : %v Retrying\n", documentID, errr)
 		} else {
-			var _, errr = collection.MutateIn(documentID, []gocb.MutateInSpec{
-				gocb.UpsertSpec("vector_data", vectorData, &gocb.UpsertSpecOptions{
-					CreatePath: true,
-					IsXattr:    true,
-				}),
-			},
-				nil,
-			)
-			if errr != nil {
-				fmt.Printf("Error mutating document %v : %v Retrying\n", documentID, errr)
-			} else {
-				// fmt.Println("Done")
-				fmt.Printf("Document ID %v got updated with vector data in xattrs\n", documentID)
-				break
-			}
+			// fmt.Println("Done")
+			fmt.Printf("Document ID %v got updated with vector data in xattrs\n", documentID)
+			break
 		}
 
 	}
