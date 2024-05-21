@@ -73,6 +73,7 @@ func UpdateDocumentsField(waitGroup *sync.WaitGroup, collection *gocb.Collection
 			log.Fatal(err)
 		} else {
 			fmt.Printf("Document ID %v got upserted with vector in doc.\n", documentID)
+			break
 		}
 
 	}
@@ -93,6 +94,9 @@ func UpdateDocumentsXattrbase64(waitGroup *sync.WaitGroup, collection *gocb.Coll
 		})
 		if err != nil {
 			panic(err)
+		} else {
+			fmt.Printf("Document ID %v got upserted.\n", documentID)
+			break
 		}
 	}
 }
@@ -109,6 +113,9 @@ func UpdateDocumentsXattrbase64field(waitGroup *sync.WaitGroup, collection *gocb
 		})
 		if err != nil {
 			panic(err)
+		} else {
+			fmt.Printf("Document ID %v got upserted.\n", documentID)
+			break
 		}
 	}
 }

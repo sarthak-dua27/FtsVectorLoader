@@ -357,19 +357,19 @@ func main() {
 			for j := startIndex; j < end; j++ {
 				if xattrFlag {
 					if base64Flag {
-						vectArr := encodedVectors[j]
+						vectArr := encodedVectors[j % len(encodedVectors) ]
 						go internal.UpdateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
 					} else {
-						vectArr := vectors[j]
+						vectArr := vectors[j % len(vectors)]
 						go internal.UpdateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
 					}
 	
 				} else {
 					if base64Flag {
-						vectArr := encodedVectors[j]
+						vectArr := encodedVectors[j % len(encodedVectors)]
 						go internal.UpdateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
 					} else {
-						vectArr := vectors[j]
+						vectArr := vectors[j % len(vectors)]
 						go internal.UpdateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1)
 					}
 				}
@@ -379,6 +379,4 @@ func main() {
 			startIndex = end
 		}
 	}
-
-	
 }
