@@ -38,9 +38,8 @@ func main() {
 	var provideDefaultDocs bool
 	var invalidVecsLoader bool
 	var invalidDimensions int
-	var upsertFlag bool
-	var deleteFlag bool
-	// var vectorCategory string
+	var upsertPercent float64
+
 
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
 	flag.StringVar(&bucketName, "bucketName", "", "Bucket name")
@@ -52,20 +51,18 @@ func main() {
 	flag.StringVar(&documentIdPrefix, "documentIdPrefix", "", "documentIdPrefix")
 	flag.IntVar(&startIndex, "startIndex", 0, "startIndex")
 	flag.IntVar(&endIndex, "endIndex", 50, "endIndex")
-	flag.IntVar(&batchSize, "batchSize", 600, "batchSize")
-	flag.BoolVar(&provideDefaultDocs, "provideDefaultDocs", true, "provideDefaultDocs = true will upsert docs and then update docs for xattr (metadata)")
+	flag.IntVar(&batchSize, "batchSize", 20, "batchSize")
+	flag.BoolVar(&provideDefaultDocs, "provideDefaultDocs", false, "provideDefaultDocs = true will upsert docs and then update docs for xattr (metadata)")
 	flag.BoolVar(&capella, "capella", false, "pushing docs to capella?")
 	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
 	flag.BoolVar(&xattrFlag, "xattrFlag", false, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
 	flag.StringVar(&floatListStr, "percentagesToResize", "", "Comma-separated list of float32 values")
 	flag.StringVar(&intListStr, "dimensionsForResize", "", "Comma-separated list of int values")
 	flag.BoolVar(&base64Flag, "base64Flag", false, "true results in, embeddings get uploaded as base64 strings")
-	flag.BoolVar(&invalidVecsLoader, "invalidVecsLoader", false, "s")
-	flag.IntVar(&invalidDimensions, "invalidDimensions", 128, "s")
-	flag.BoolVar(&upsertFlag, "upsertFlag",false,"")
-	flag.BoolVar(&deleteFlag,"deleteFlag",false,"")
+	flag.BoolVar(&invalidVecsLoader, "invalidVecsLoader", false, "")
+	flag.IntVar(&invalidDimensions, "invalidDimensions", 128, "")
+	flag.Float64Var(&upsertPercent, "upsertPercent",0,"")
 
-	// flag.StringVar(&vectorCategory, "vectorCategory", "learn", "Available categories are learn, base, groundtruth and query")
 
 	flag.Parse()
 
@@ -114,7 +111,6 @@ func main() {
 		internal.InvalidVecsLoader(invalidDimensions,collection,xattrFlag,base64Flag)
 	} else {
 		if floatListStr != "" {
-			// isResize = true
 	
 			var floatList []float32
 	
@@ -182,37 +178,48 @@ func main() {
 				encodedVectors = append(encodedVectors, base64String)
 			}
 		}
+		if upsertPercent != 0 {
+			internal.CrudOperations(startIndex, endIndex, upsertPercent,encodedVectors,vectors,xattrFlag,base64Flag,documentIdPrefix,provideDefaultDocs,collection, batchSize)
+		} else {
 
+		numDocs := endIndex - startIndex
+		goRoutines := 1000
+		batchCount := int(numDocs / goRoutines)
+
+		startTime := time.Now()
 		var wg sync.WaitGroup
-		for startIndex != endIndex {
-			end := startIndex + batchSize
-			if end > endIndex {
-				end = endIndex
-			}
-			wg.Add(end - startIndex)
-			for j := startIndex; j < end; j++ {
+		for i:=0;i<goRoutines;i++ {
+
+		end := startIndex + batchCount
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			for j := start; j < end; j++ {
 				if xattrFlag {
 					if base64Flag {
-						vectArr := encodedVectors[j % len(encodedVectors) ]
-						go internal.UpdateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
+						vectArr := encodedVectors[j % len(encodedVectors)]
+						internal.UpdateDocumentsXattrbase64(collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, provideDefaultDocs, j+1)
 					} else {
 						vectArr := vectors[j % len(vectors)]
-						go internal.UpdateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
+						internal.UpdateDocumentsXattr(collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, provideDefaultDocs, j+1)
 					}
-	
 				} else {
 					if base64Flag {
 						vectArr := encodedVectors[j % len(encodedVectors)]
-						go internal.UpdateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
+						internal.UpdateDocumentsXattrbase64field(collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, provideDefaultDocs, j+1)
 					} else {
 						vectArr := vectors[j % len(vectors)]
-						go internal.UpdateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1)
+						internal.UpdateDocumentsField(collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, provideDefaultDocs, j+1)
 					}
 				}
-	
 			}
-			wg.Wait()
-			startIndex = end
-		}
+		}(startIndex, end)
+		startIndex = end
 	}
+
+	wg.Wait()
+
+	fmt.Print(time.Since(startTime))
+			}
+}
 }
