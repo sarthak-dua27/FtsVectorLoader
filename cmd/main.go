@@ -40,8 +40,9 @@ func main() {
 	var invalidDimensions int
 	var upsertFlag bool
 	var deleteFlag bool
-	// var vectorCategory string
-
+	var numQueries int
+	var duration int
+	var indexName string
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
 	flag.StringVar(&bucketName, "bucketName", "", "Bucket name")
 	flag.StringVar(&scopeName, "scopeName", "", "Scope name")
@@ -55,17 +56,18 @@ func main() {
 	flag.IntVar(&batchSize, "batchSize", 600, "batchSize")
 	flag.BoolVar(&provideDefaultDocs, "provideDefaultDocs", true, "provideDefaultDocs = true will upsert docs and then update docs for xattr (metadata)")
 	flag.BoolVar(&capella, "capella", false, "pushing docs to capella?")
-	flag.StringVar(&datasetName, "datasetName", "", "Name of the dataset ('sift', 'siftsmall', 'gist')")
+	flag.StringVar(&datasetName, "datasetName", "siftsmall", "Name of the dataset ('sift', 'siftsmall', 'gist')")
 	flag.BoolVar(&xattrFlag, "xattrFlag", false, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
 	flag.StringVar(&floatListStr, "percentagesToResize", "", "Comma-separated list of float32 values")
 	flag.StringVar(&intListStr, "dimensionsForResize", "", "Comma-separated list of int values")
 	flag.BoolVar(&base64Flag, "base64Flag", false, "true results in, embeddings get uploaded as base64 strings")
 	flag.BoolVar(&invalidVecsLoader, "invalidVecsLoader", false, "s")
 	flag.IntVar(&invalidDimensions, "invalidDimensions", 128, "s")
-	flag.BoolVar(&upsertFlag, "upsertFlag",false,"")
-	flag.BoolVar(&deleteFlag,"deleteFlag",false,"")
-
-	// flag.StringVar(&vectorCategory, "vectorCategory", "learn", "Available categories are learn, base, groundtruth and query")
+	flag.BoolVar(&upsertFlag, "upsertFlag", false, "")
+	flag.BoolVar(&deleteFlag, "deleteFlag", false, "")
+	flag.IntVar(&numQueries, "numQueries", 0, "flag to run queries")
+	flag.IntVar(&duration, "duration", 5, "duration to run queries")
+	flag.StringVar(&indexName, "indexName", "", "index name to run queires on")
 
 	flag.Parse()
 
@@ -98,6 +100,7 @@ func main() {
 	if er != nil {
 		panic(fmt.Errorf("error creating cluster object : %v", er))
 	}
+	internal.CreateUtilities(cluster, bucketName, scopeName, collectionName, capella)
 	bucket := cluster.Bucket(bucketName)
 
 	err := bucket.WaitUntilReady(15*time.Second, nil)
@@ -108,16 +111,37 @@ func main() {
 	scope := bucket.Scope(scopeName)
 
 	collection := scope.Collection(collectionName)
+	//dataset downloading and extraction
+	baseUrl := "ftp://ftp.irisa.fr/local/texmex/corpus/"
+	datasetUrl := baseUrl + datasetName + ".tar.gz"
 
+	// Check if the dataset file already exists in the "raw/" folder
+	if internal.DatasetExists("raw/" + datasetName + ".tar.gz") {
+		fmt.Println("Dataset file already exists. Skipping download.")
+	} else {
+		fmt.Println("Downloading the dataset")
+		internal.DownloadDataset(datasetUrl, datasetName)
+	}
+
+	if numQueries != 0 {
+		var queryVecs = "source/" + datasetName + "/" + datasetName + "_query.fvecs"
+		vectors, err := internal.ReadVectorsFromFile(queryVecs)
+		if err != nil {
+			fmt.Println("Error reading vectors from file:", err)
+			return
+		}
+		internal.RunQueriesPerSecond(nodeAddress, indexName, vectors, username, password, numQueries, time.Duration(duration)*time.Minute)
+		return
+	}
 
 	if invalidVecsLoader {
-		internal.InvalidVecsLoader(invalidDimensions,collection,xattrFlag,base64Flag)
+		internal.InvalidVecsLoader(invalidDimensions, collection, xattrFlag, base64Flag)
 	} else {
 		if floatListStr != "" {
 			// isResize = true
-	
+
 			var floatList []float32
-	
+
 			floatStrList := strings.Split(floatListStr, ",")
 			for _, floatStr := range floatStrList {
 				floatVal, err := strconv.ParseFloat(floatStr, 32)
@@ -128,7 +152,7 @@ func main() {
 				floatList = append(floatList, float32(floatVal))
 			}
 			percentagesToResize = floatList
-	
+
 			var intList []int
 			intStrList := strings.Split(intListStr, ",")
 			for _, intStr := range intStrList {
@@ -139,41 +163,29 @@ func main() {
 				}
 				intList = append(intList, intVal)
 			}
-	
+
 			dimensionsForResize = intList
-	
+
 			fmt.Println(dimensionsForResize)
 			fmt.Println(percentagesToResize)
-	
+
 		}
-	
-		//dataset downloading and extraction
-		baseUrl := "ftp://ftp.irisa.fr/local/texmex/corpus/"
-		datasetUrl := baseUrl + datasetName + ".tar.gz"
-	
-		// Check if the dataset file already exists in the "raw/" folder
-		if internal.DatasetExists("raw/" + datasetName + ".tar.gz") {
-			fmt.Println("Dataset file already exists. Skipping download.")
-		} else {
-			fmt.Println("Downloading the dataset")
-			internal.DownloadDataset(datasetUrl, datasetName)
-		}
-	
+
 		var learnVecs = "source/" + datasetName + "/" + datasetName + "_base.fvecs"
-	
+
 		vectors, err := internal.ReadVectorsFromFile(learnVecs)
 		if err != nil {
 			fmt.Println("Error:", err)
 			return
 		}
-	
+
 		if floatListStr != "" {
 			err = internal.ResizeVectors(vectors, percentagesToResize, dimensionsForResize)
 			if err != nil {
 				log.Printf("Error resizing vectors %v\n", err)
 			}
 		}
-	
+
 		var encodedVectors []string
 		if base64Flag {
 			for _, vector := range vectors {
@@ -193,23 +205,23 @@ func main() {
 			for j := startIndex; j < end; j++ {
 				if xattrFlag {
 					if base64Flag {
-						vectArr := encodedVectors[j % len(encodedVectors) ]
+						vectArr := encodedVectors[j%len(encodedVectors)]
 						go internal.UpdateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
 					} else {
-						vectArr := vectors[j % len(vectors)]
+						vectArr := vectors[j%len(vectors)]
 						go internal.UpdateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
 					}
-	
+
 				} else {
 					if base64Flag {
-						vectArr := encodedVectors[j % len(encodedVectors)]
+						vectArr := encodedVectors[j%len(encodedVectors)]
 						go internal.UpdateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
 					} else {
-						vectArr := vectors[j % len(vectors)]
+						vectArr := vectors[j%len(vectors)]
 						go internal.UpdateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1)
 					}
 				}
-	
+
 			}
 			wg.Wait()
 			startIndex = end
