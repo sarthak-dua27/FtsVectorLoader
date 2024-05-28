@@ -10,6 +10,16 @@ import (
 	"os/exec"
 )
 
+func ReadDataset(datasetName string, datasetType string) ([][]float32, error) {
+	var vecs = "source/" + datasetName + "/" + datasetName + "_" + datasetType + ".fvecs"
+	vectors, err := ReadVectorsFromFile(vecs)
+	if err != nil {
+		fmt.Println("Error reading vectors from file:", err)
+		return nil, err
+	}
+	return vectors, nil
+}
+
 func extractDataset(source string) {
 
 	// Destination directory where the contents will be extracted

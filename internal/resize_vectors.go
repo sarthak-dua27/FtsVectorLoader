@@ -3,10 +3,46 @@ package internal
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 )
 
-func ResizeVectors(trainVecs [][]float32, percentages []float32, dims []int) error {
-	totalVectors := len(trainVecs)
+func DecriptResizeVariables(percentagesToResizeStr string, dimensionsForResizeStr string, percentagesToResize *[]float32, dimensionsForResize *[]int) {
+	if percentagesToResizeStr != "" {
+		var floatList []float32
+
+		floatStrList := strings.Split(percentagesToResizeStr, ",")
+		for _, floatStr := range floatStrList {
+			floatVal, err := strconv.ParseFloat(floatStr, 32)
+			if err != nil {
+				fmt.Printf("Error parsing float value: %v\n", err)
+				return
+			}
+			floatList = append(floatList, float32(floatVal))
+		}
+		*percentagesToResize = floatList
+
+		var intList []int
+		intStrList := strings.Split(dimensionsForResizeStr, ",")
+		for _, intStr := range intStrList {
+			intVal, err := strconv.Atoi(intStr)
+			if err != nil {
+				fmt.Printf("Error parsing integer value: %v\n", err)
+				return
+			}
+			intList = append(intList, intVal)
+		}
+
+		*dimensionsForResize = intList
+
+		fmt.Println(*dimensionsForResize)
+		fmt.Println(*percentagesToResize)
+
+	}
+}
+
+func ResizeVectors(trainVecs *[][]float32, percentages []float32, dims []int) error {
+	totalVectors := len(*trainVecs)
 
 	// Get random indices for vectors to resize
 	indicesToResize := rand.Perm(totalVectors)
@@ -33,16 +69,13 @@ func ResizeVectors(trainVecs [][]float32, percentages []float32, dims []int) err
 		fmt.Printf("Number of docs resized with dimension %d is %d\n", dims[idx], len(currentIndices))
 
 		for _, index := range currentIndices {
-			vector := trainVecs[index]
+			vector := (*trainVecs)[index]
 			currentDim := len(vector)
 
-			// Resize the vector to the desired dimension
 			if currentDim < dims[idx] {
-				// If the current dimension is less than the desired dimension, repeat the values
-				trainVecs[index] = repeatValues(vector, dims[idx])
+				(*trainVecs)[index] = repeatValues(vector, dims[idx])
 			} else if currentDim > dims[idx] {
-				// If the current dimension is greater than the desired dimension, truncate the vector
-				trainVecs[index] = vector[:dims[idx]]
+				(*trainVecs)[index] = vector[:dims[idx]]
 			}
 		}
 	}

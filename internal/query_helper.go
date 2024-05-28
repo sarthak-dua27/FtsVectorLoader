@@ -26,7 +26,7 @@ func SimulateQuery(nodeAddress string, indexName string, vector []float32, usern
 
 	var field = "vector_data"
 	if xattr {
-		field = "$xattrs.vector_data"
+		field = "_$xattrs.vector_data"
 	}
 	if base64 {
 		field = "vector_data_base64"

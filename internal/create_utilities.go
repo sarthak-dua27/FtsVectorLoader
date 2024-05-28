@@ -20,8 +20,8 @@ func CreateUtilities(cluster *gocb.Cluster, bucketName string, scopeName string,
 			},
 			ConflictResolutionType: gocb.ConflictResolutionTypeSequenceNumber,
 		}, nil)
-
 	}
+
 	bucket := cluster.Bucket(bucketName)
 
 	collections := bucket.Collections()

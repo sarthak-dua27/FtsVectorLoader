@@ -7,8 +7,6 @@ import (
 	"github.com/couchbase/gocb/v2"
 	"log"
 	"main/internal"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -31,8 +29,8 @@ func main() {
 
 	var percentagesToResize []float32
 	var dimensionsForResize []int
-	var floatListStr string
-	var intListStr string
+	var percentagesToResizeStr string
+	var dimensionsForResizeStr string
 	var base64Flag bool
 	var capella bool
 	var provideDefaultDocs bool
@@ -58,8 +56,8 @@ func main() {
 	flag.BoolVar(&capella, "capella", false, "pushing docs to capella?")
 	flag.StringVar(&datasetName, "datasetName", "siftsmall", "Name of the dataset ('sift', 'siftsmall', 'gist')")
 	flag.BoolVar(&xattrFlag, "xattrFlag", false, "xattrFlag = true will upsert vectors into xattr (metadata) and false will upsert vectors into document")
-	flag.StringVar(&floatListStr, "percentagesToResize", "", "Comma-separated list of float32 values")
-	flag.StringVar(&intListStr, "dimensionsForResize", "", "Comma-separated list of int values")
+	flag.StringVar(&percentagesToResizeStr, "percentagesToResize", "", "Comma-separated list of float32 values")
+	flag.StringVar(&dimensionsForResizeStr, "dimensionsForResize", "", "Comma-separated list of int values")
 	flag.BoolVar(&base64Flag, "base64Flag", false, "true results in, embeddings get uploaded as base64 strings")
 	flag.BoolVar(&invalidVecsLoader, "invalidVecsLoader", false, "s")
 	flag.IntVar(&invalidDimensions, "invalidDimensions", 128, "s")
@@ -70,46 +68,19 @@ func main() {
 	flag.StringVar(&indexName, "indexName", "", "index name to run queires on")
 
 	flag.Parse()
-
 	var cluster *gocb.Cluster
-	var er error
-	if capella {
-		options := gocb.ClusterOptions{
-			Authenticator: gocb.PasswordAuthenticator{
-				Username: username,
-				Password: password,
-			},
-			SecurityConfig: gocb.SecurityConfig{
-				TLSSkipVerify: true,
-			},
-		}
-		if err := options.ApplyProfile(gocb.
-			ClusterConfigProfileWanDevelopment); err != nil {
-			log.Fatal(err)
-		}
-		cluster, er = gocb.Connect(nodeAddress, options)
-	} else {
-		cluster, er = gocb.Connect("couchbase://"+nodeAddress, gocb.ClusterOptions{
-			Authenticator: gocb.PasswordAuthenticator{
-				Username: username,
-				Password: password,
-			},
-		})
-	}
 
-	if er != nil {
-		panic(fmt.Errorf("error creating cluster object : %v", er))
-	}
+	internal.Initialise_cluster(&cluster, capella, username, password, nodeAddress)
+
 	internal.CreateUtilities(cluster, bucketName, scopeName, collectionName, capella)
 	bucket := cluster.Bucket(bucketName)
 
 	err := bucket.WaitUntilReady(15*time.Second, nil)
 	if err != nil {
-		panic(err)
+		fmt.Println("Error in waiting for bucket to be ready %v", err)
 	}
 
 	scope := bucket.Scope(scopeName)
-
 	collection := scope.Collection(collectionName)
 	//dataset downloading and extraction
 	baseUrl := "ftp://ftp.irisa.fr/local/texmex/corpus/"
@@ -123,14 +94,30 @@ func main() {
 		internal.DownloadDataset(datasetUrl, datasetName)
 	}
 
+	//Resize Vectors if required
+	internal.DecriptResizeVariables(percentagesToResizeStr, dimensionsForResizeStr, &percentagesToResize, &dimensionsForResize)
+	var datasetType = "learn"
+	if numQueries != 0 {
+		datasetType = "query"
+	}
+
+	// Read dataset file and extract vector
+	vectors, err := internal.ReadDataset(datasetName, datasetType)
+	if err != nil {
+		fmt.Printf("Error reading dataset %v\n", err)
+		return
+	}
+
+	// Change vectors if required
+	if percentagesToResizeStr != "" {
+		err = internal.ResizeVectors(&vectors, percentagesToResize, dimensionsForResize)
+		if err != nil {
+			log.Printf("Error resizing vectors %v\n", err)
+		}
+	}
+
 	//FOR RUNNING QUERIES
 	if numQueries != 0 {
-		var queryVecs = "source/" + datasetName + "/" + datasetName + "_query.fvecs"
-		vectors, err := internal.ReadVectorsFromFile(queryVecs)
-		if err != nil {
-			fmt.Println("Error reading vectors from file:", err)
-			return
-		}
 		internal.RunQueriesPerSecond(nodeAddress, indexName, vectors, username, password, numQueries, time.Duration(duration)*time.Minute, xattrFlag, base64Flag)
 		return
 	}
@@ -139,55 +126,6 @@ func main() {
 	if invalidVecsLoader {
 		internal.InvalidVecsLoader(invalidDimensions, collection, xattrFlag, base64Flag)
 	} else {
-		if floatListStr != "" {
-			// isResize = true
-
-			var floatList []float32
-
-			floatStrList := strings.Split(floatListStr, ",")
-			for _, floatStr := range floatStrList {
-				floatVal, err := strconv.ParseFloat(floatStr, 32)
-				if err != nil {
-					fmt.Printf("Error parsing float value: %v\n", err)
-					return
-				}
-				floatList = append(floatList, float32(floatVal))
-			}
-			percentagesToResize = floatList
-
-			var intList []int
-			intStrList := strings.Split(intListStr, ",")
-			for _, intStr := range intStrList {
-				intVal, err := strconv.Atoi(intStr)
-				if err != nil {
-					fmt.Printf("Error parsing integer value: %v\n", err)
-					return
-				}
-				intList = append(intList, intVal)
-			}
-
-			dimensionsForResize = intList
-
-			fmt.Println(dimensionsForResize)
-			fmt.Println(percentagesToResize)
-
-		}
-
-		var learnVecs = "source/" + datasetName + "/" + datasetName + "_base.fvecs"
-
-		vectors, err := internal.ReadVectorsFromFile(learnVecs)
-		if err != nil {
-			fmt.Println("Error:", err)
-			return
-		}
-
-		if floatListStr != "" {
-			err = internal.ResizeVectors(vectors, percentagesToResize, dimensionsForResize)
-			if err != nil {
-				log.Printf("Error resizing vectors %v\n", err)
-			}
-		}
-
 		var encodedVectors []string
 		if base64Flag {
 			for _, vector := range vectors {
@@ -213,7 +151,6 @@ func main() {
 						vectArr := vectors[j%len(vectors)]
 						go internal.UpdateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
 					}
-
 				} else {
 					if base64Flag {
 						vectArr := encodedVectors[j%len(encodedVectors)]
