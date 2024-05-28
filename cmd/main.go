@@ -123,6 +123,7 @@ func main() {
 		internal.DownloadDataset(datasetUrl, datasetName)
 	}
 
+	//FOR RUNNING QUERIES
 	if numQueries != 0 {
 		var queryVecs = "source/" + datasetName + "/" + datasetName + "_query.fvecs"
 		vectors, err := internal.ReadVectorsFromFile(queryVecs)
@@ -130,10 +131,11 @@ func main() {
 			fmt.Println("Error reading vectors from file:", err)
 			return
 		}
-		internal.RunQueriesPerSecond(nodeAddress, indexName, vectors, username, password, numQueries, time.Duration(duration)*time.Minute)
+		internal.RunQueriesPerSecond(nodeAddress, indexName, vectors, username, password, numQueries, time.Duration(duration)*time.Minute, xattrFlag, base64Flag)
 		return
 	}
 
+	//FOR LOADING DATA
 	if invalidVecsLoader {
 		internal.InvalidVecsLoader(invalidDimensions, collection, xattrFlag, base64Flag)
 	} else {

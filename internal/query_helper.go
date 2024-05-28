@@ -20,9 +20,17 @@ func callAPI(username string, password string, url string, payload map[string]in
 	return postResult, nil
 }
 
-func SimulateQuery(nodeAddress string, indexName string, vector []float32, username string, password string) {
+func SimulateQuery(nodeAddress string, indexName string, vector []float32, username string, password string, xattr bool, base64 bool) {
 
 	url := fmt.Sprintf("http://%s:8094/api/index/%s/query", nodeAddress, indexName)
+
+	var field = "vector_data"
+	if xattr {
+		field = "$xattrs.vector_data"
+	}
+	if base64 {
+		field = "vector_data_base64"
+	}
 
 	payload := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -32,7 +40,7 @@ func SimulateQuery(nodeAddress string, indexName string, vector []float32, usern
 		"fields":  []string{"*"},
 		"knn": []map[string]interface{}{
 			{
-				"field":  "vector_data",
+				"field":  field,
 				"k":      10,
 				"vector": vector,
 			},
@@ -47,12 +55,12 @@ func SimulateQuery(nodeAddress string, indexName string, vector []float32, usern
 
 }
 
-func RunQueriesPerSecond(nodeAddress string, indexName string, vector [][]float32, username string, password string, n int, duration time.Duration) {
+func RunQueriesPerSecond(nodeAddress string, indexName string, vector [][]float32, username string, password string, n int, duration time.Duration, xattr bool, base64 bool) {
 	startTime := time.Now()
 	for time.Since(startTime) < duration {
 		timeB4 := time.Now()
 		for i := 0; i < n; i++ {
-			go SimulateQuery(nodeAddress, indexName, vector[rand.Intn(len(vector)-1)], username, password)
+			go SimulateQuery(nodeAddress, indexName, vector[rand.Intn(len(vector)-1)], username, password, xattr, base64)
 		}
 		timeToSleep := time.Second - time.Since(timeB4)
 		if timeToSleep > 0 {
