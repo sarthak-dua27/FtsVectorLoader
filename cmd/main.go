@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"flag"
 	"fmt"
 	"github.com/couchbase/gocb/v2"
 	"log"
+	"main/context"
 	"main/internal"
 	"sync"
 	"time"
@@ -68,9 +70,37 @@ func main() {
 	flag.StringVar(&indexName, "indexName", "", "index name to run queires on")
 
 	flag.Parse()
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, context.NodeAddressKey, nodeAddress)
+	ctx = context.WithValue(ctx, context.BucketNameKey, bucketName)
+	ctx = context.WithValue(ctx, context.ScopeNameKey, scopeName)
+	ctx = context.WithValue(ctx, context.CollectionNameKey, collectionName)
+	ctx = context.WithValue(ctx, context.UsernameKey, username)
+	ctx = context.WithValue(ctx, context.PasswordKey, password)
+	ctx = context.WithValue(ctx, context.FieldNameKey, fieldName)
+	ctx = context.WithValue(ctx, context.DocumentIdPrefixKey, documentIdPrefix)
+	ctx = context.WithValue(ctx, context.StartIndexKey, startIndex)
+	ctx = context.WithValue(ctx, context.EndIndexKey, endIndex)
+	ctx = context.WithValue(ctx, context.BatchSizeKey, batchSize)
+	ctx = context.WithValue(ctx, context.ProvideDefaultDocsKey, provideDefaultDocs)
+	ctx = context.WithValue(ctx, context.CapellaKey, capella)
+	ctx = context.WithValue(ctx, context.DatasetNameKey, datasetName)
+	ctx = context.WithValue(ctx, context.XattrFlagKey, xattrFlag)
+	ctx = context.WithValue(ctx, context.PercentagesToResizeStrKey, percentagesToResizeStr)
+	ctx = context.WithValue(ctx, context.DimensionsForResizeStrKey, dimensionsForResizeStr)
+	ctx = context.WithValue(ctx, context.Base64FlagKey, base64Flag)
+	ctx = context.WithValue(ctx, context.InvalidVecsLoaderKey, invalidVecsLoader)
+	ctx = context.WithValue(ctx, context.InvalidDimensionsKey, invalidDimensions)
+	ctx = context.WithValue(ctx, context.UpsertFlagKey, upsertFlag)
+	ctx = context.WithValue(ctx, context.DeleteFlagKey, deleteFlag)
+	ctx = context.WithValue(ctx, context.NumQueriesKey, numQueries)
+	ctx = context.WithValue(ctx, context.DurationKey, duration)
+	ctx = context.WithValue(ctx, context.IndexNameKey, indexName)
+
 	var cluster *gocb.Cluster
 
-	internal.Initialise_cluster(&cluster, capella, username, password, nodeAddress)
+	internal.Initialise_cluster(ctx, &cluster)
 
 	internal.CreateUtilities(cluster, bucketName, scopeName, collectionName, capella)
 	bucket := cluster.Bucket(bucketName)
@@ -118,6 +148,7 @@ func main() {
 
 	//FOR RUNNING QUERIES
 	if numQueries != 0 {
+
 		internal.RunQueriesPerSecond(nodeAddress, indexName, vectors, username, password, numQueries, time.Duration(duration)*time.Minute, xattrFlag, base64Flag)
 		return
 	}

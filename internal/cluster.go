@@ -1,12 +1,13 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"github.com/couchbase/gocb/v2"
 	"log"
 )
 
-func Initialise_cluster(cluster **gocb.Cluster, capella bool, username string, password string, nodeAddress string) {
+func Initialise_cluster(ctx *context.Context, cluster **gocb.Cluster) {
 	var er error
 	if capella {
 		options := gocb.ClusterOptions{

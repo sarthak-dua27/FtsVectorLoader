@@ -8,8 +8,8 @@ import (
 
 func callAPI(username string, password string, url string, payload map[string]interface{}) (map[string]interface{}, error) {
 	//fmt.Printf("Executing query on url %s with payload %v", url, payload)
-	apiClient := NewAPIClient(url)
-	resp, err := apiClient.DoRequest("POST", username, password, payload)
+	apiClient := NewAPIClient(url, "POST", username, password)
+	resp, err := apiClient.DoRequest(payload)
 	if err != nil {
 		return nil, err
 	}
