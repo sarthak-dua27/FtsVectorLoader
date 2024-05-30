@@ -78,9 +78,10 @@ func main() {
 
 	bucket := cluster.Bucket(bucketName)
 
-	err := bucket.WaitUntilReady(15*time.Second, nil)
+	err := bucket.WaitUntilReady(30*time.Second, nil)
 	if err != nil {
-		fmt.Println("Error in waiting for bucket to be ready %v", err)
+		fmt.Printf("Error in waiting for bucket to be ready %v\n", err)
+		return
 	}
 
 	scope := bucket.Scope(scopeName)
@@ -121,7 +122,7 @@ func main() {
 
 	//FOR RUNNING QUERIES
 	if numQueries != 0 {
-		internal.RunQueriesPerSecond(nodeAddress, indexName, vectors, username, password, numQueries, time.Duration(duration)*time.Minute, xattrFlag, base64Flag)
+		internal.RunQueriesPerSecond(nodeAddress, indexName, vectors, username, password, numQueries, time.Duration(duration)*time.Minute, xattrFlag, base64Flag, capella)
 		return
 	}
 

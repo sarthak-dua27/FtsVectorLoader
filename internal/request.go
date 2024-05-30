@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -19,7 +20,9 @@ type APIClient struct {
 func NewAPIClient(baseURL string) *APIClient {
 	return &APIClient{
 		BaseURL: baseURL,
-		Client:  &http.Client{},
+		Client: &http.Client{Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}},
 	}
 }
 
@@ -66,7 +69,7 @@ func ProcessResponse(resp *http.Response) (map[string]interface{}, error) {
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("error unmarshalling response body: %v", err)
+		return nil, fmt.Errorf("error unmarshalling response body: %v -- \nResponse= %v\n", err, string(body))
 	}
 
 	return result, nil

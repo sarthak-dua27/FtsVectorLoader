@@ -22,10 +22,32 @@ func callAPI(username string, password string, url string, payload map[string]in
 	return postResult, nil
 }
 
-func SimulateQuery(nodeAddress string, indexName string, vector []float32, username string, password string, xattr bool, base64 bool) {
+func getSearchNodes(nodeAddress string) []string {
+	var surls []string
+	urls := resolve(nodeAddress)
+	for _, x := range urls {
+		services := strings.Split(x, "-")[1]
+		if strings.Contains(services, "s") {
+			surls = append(surls, x)
+		}
+	}
+	return surls
+}
 
-	url := fmt.Sprintf("http://%s:8094/api/index/%s/query", nodeAddress, indexName)
+func resolveAndGetSearchNode(nodeAddress string, capella bool) string {
+	var url string
+	if capella {
+		urls := getSearchNodes(nodeAddress)
+		url = fmt.Sprintf("https://%s:18094/", urls[0])
+	} else {
+		url = fmt.Sprintf("http://%s:8094/", nodeAddress)
+	}
+	return url
+}
 
+func SimulateQuery(nodeAddress string, indexName string, vector []float32, username string, password string, xattr bool, base64 bool, capella bool) {
+	urls := getSearchNodes(nodeAddress)
+	url := fmt.Sprintf("https://%s:18094/api/index/%s/query", urls[rand.Intn(len(urls))], indexName)
 	var field = "vector_data"
 	if xattr {
 		field = "_$xattrs.vector_data"
@@ -61,8 +83,9 @@ func SimulateQuery(nodeAddress string, indexName string, vector []float32, usern
 
 }
 
-func getAllIndexes(nodeAddress string, username string, password string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("http://%s:8094/api/index", nodeAddress)
+func getAllIndexes(nodeAddress string, username string, password string, capella bool) (map[string]interface{}, error) {
+	url := resolveAndGetSearchNode(nodeAddress, capella)
+	url = url + "api/index"
 	apiClient := NewAPIClient(url)
 	resp, err := apiClient.DoRequest("GET", username, password, nil)
 	if err != nil {
@@ -75,10 +98,10 @@ func getAllIndexes(nodeAddress string, username string, password string) (map[st
 	return postResult, nil
 }
 
-func getIndexNames(nodeAddress string, username string, password string, indexNames *[]string) {
-	indexes, err := getAllIndexes(nodeAddress, username, password)
+func getIndexNames(nodeAddress string, username string, password string, indexNames *[]string, capella bool) {
+	indexes, err := getAllIndexes(nodeAddress, username, password, capella)
 	if err != nil {
-		fmt.Printf("Error retriving index names %v", indexes)
+		fmt.Printf("Error retriving index names := %v :=Indexes %v", err, indexes)
 		return
 	}
 	indexDefs, _ := indexes["indexDefs"].(map[string]interface{})
@@ -88,13 +111,13 @@ func getIndexNames(nodeAddress string, username string, password string, indexNa
 	}
 }
 
-func run(nodeAddress string, indexName string, vector [][]float32, username string, password string, n int, duration time.Duration, xattr bool, base64 bool, wg *sync.WaitGroup) {
+func run(nodeAddress string, indexName string, vector [][]float32, username string, password string, n int, duration time.Duration, xattr bool, base64 bool, wg *sync.WaitGroup, capella bool) {
 	defer wg.Done()
 	startTime := time.Now()
 	for time.Since(startTime) < duration {
 		timeB4 := time.Now()
 		for i := 0; i < n; i++ {
-			go SimulateQuery(nodeAddress, indexName, vector[rand.Intn(len(vector)-1)], username, password, xattr, base64)
+			go SimulateQuery(nodeAddress, indexName, vector[rand.Intn(len(vector)-1)], username, password, xattr, base64, capella)
 		}
 		timeToSleep := time.Second - time.Since(timeB4)
 		if timeToSleep > 0 {
@@ -102,28 +125,28 @@ func run(nodeAddress string, indexName string, vector [][]float32, username stri
 		}
 	}
 }
-func RunQueriesPerSecond(nodeAddress string, indexName string, vector [][]float32, username string, password string, n int, duration time.Duration, xattr bool, base64 bool) {
+func RunQueriesPerSecond(nodeAddress string, indexName string, vector [][]float32, username string, password string, n int, duration time.Duration, xattr bool, base64 bool, capella bool) {
 	var indexNames []string
 	var customizeXattrandBase64params bool
 	if indexName != "" {
 		customizeXattrandBase64params = true
 		indexNames = append(indexNames, indexName)
 	} else {
-		getIndexNames(nodeAddress, username, password, &indexNames)
+		getIndexNames(nodeAddress, username, password, &indexNames, capella)
 	}
 	var wg sync.WaitGroup
 	for _, index := range indexNames {
 		wg.Add(1)
 		if customizeXattrandBase64params {
 			if strings.Contains(index, "xattr") {
-				go run(nodeAddress, index, vector, username, password, n, duration, true, base64, &wg)
+				go run(nodeAddress, index, vector, username, password, n, duration, true, base64, &wg, capella)
 			} else if strings.Contains(index, "base") {
-				go run(nodeAddress, index, vector, username, password, n, duration, xattr, true, &wg)
+				go run(nodeAddress, index, vector, username, password, n, duration, xattr, true, &wg, capella)
 			} else {
-				go run(nodeAddress, index, vector, username, password, n, duration, xattr, base64, &wg)
+				go run(nodeAddress, index, vector, username, password, n, duration, xattr, base64, &wg, capella)
 			}
 		} else {
-			go run(nodeAddress, index, vector, username, password, n, duration, xattr, base64, &wg)
+			go run(nodeAddress, index, vector, username, password, n, duration, xattr, base64, &wg, capella)
 		}
 
 	}
