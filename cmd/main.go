@@ -72,7 +72,10 @@ func main() {
 
 	internal.Initialise_cluster(&cluster, capella, username, password, nodeAddress)
 
-	internal.CreateUtilities(cluster, bucketName, scopeName, collectionName, capella)
+	if !capella {
+		internal.CreateUtilities(cluster, bucketName, scopeName, collectionName, capella)
+	}
+
 	bucket := cluster.Bucket(bucketName)
 
 	err := bucket.WaitUntilReady(15*time.Second, nil)

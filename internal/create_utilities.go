@@ -7,20 +7,19 @@ import (
 )
 
 func CreateUtilities(cluster *gocb.Cluster, bucketName string, scopeName string, collectionName string, capella bool) {
-	if !capella {
-		bucketMgr := cluster.Buckets()
-		_ = bucketMgr.CreateBucket(gocb.CreateBucketSettings{
-			BucketSettings: gocb.BucketSettings{
-				Name:                 bucketName,
-				FlushEnabled:         true,
-				ReplicaIndexDisabled: true,
-				RAMQuotaMB:           1024,
-				NumReplicas:          0,
-				BucketType:           gocb.CouchbaseBucketType,
-			},
-			ConflictResolutionType: gocb.ConflictResolutionTypeSequenceNumber,
-		}, nil)
-	}
+
+	bucketMgr := cluster.Buckets()
+	_ = bucketMgr.CreateBucket(gocb.CreateBucketSettings{
+		BucketSettings: gocb.BucketSettings{
+			Name:                 bucketName,
+			FlushEnabled:         true,
+			ReplicaIndexDisabled: true,
+			RAMQuotaMB:           1024,
+			NumReplicas:          0,
+			BucketType:           gocb.CouchbaseBucketType,
+		},
+		ConflictResolutionType: gocb.ConflictResolutionTypeSequenceNumber,
+	}, nil)
 
 	bucket := cluster.Bucket(bucketName)
 
