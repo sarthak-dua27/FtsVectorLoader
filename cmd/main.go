@@ -42,8 +42,8 @@ func main() {
 	var duration int
 	var indexName string
 	flag.StringVar(&nodeAddress, "nodeAddress", "", "IP address of the node")
-	flag.StringVar(&bucketName, "bucketName", "", "Bucket name")
-	flag.StringVar(&scopeName, "scopeName", "", "Scope name")
+	flag.StringVar(&bucketName, "bucketName", "default", "Bucket name")
+	flag.StringVar(&scopeName, "scopeName", "_default", "Scope name")
 	flag.StringVar(&collectionName, "collectionName", "_default", "Collection name")
 	flag.StringVar(&username, "username", "", "username")
 	flag.StringVar(&password, "password", "", "password")
@@ -72,9 +72,9 @@ func main() {
 
 	internal.Initialise_cluster(&cluster, capella, username, password, nodeAddress)
 
-	if !capella {
-		internal.CreateUtilities(cluster, bucketName, scopeName, collectionName, capella)
-	}
+	// if !capella {
+	// 	internal.CreateUtilities(cluster, bucketName, scopeName, collectionName, capella)
+	// }
 
 	bucket := cluster.Bucket(bucketName)
 
@@ -91,7 +91,7 @@ func main() {
 	datasetUrl := baseUrl + datasetName + ".tar.gz"
 
 	// Check if the dataset file already exists in the "raw/" folder
-	if internal.DatasetExists("raw/" + datasetName + ".tar.gz") {
+	if internal.DatasetExists("source/" + datasetName) {
 		fmt.Println("Dataset file already exists. Skipping download.")
 	} else {
 		fmt.Println("Downloading the dataset")
@@ -100,7 +100,7 @@ func main() {
 
 	//Resize Vectors if required
 	internal.DecriptResizeVariables(percentagesToResizeStr, dimensionsForResizeStr, &percentagesToResize, &dimensionsForResize)
-	var datasetType = "learn"
+	var datasetType = "base"
 	if numQueries != 0 {
 		datasetType = "query"
 	}
@@ -150,18 +150,18 @@ func main() {
 				if xattrFlag {
 					if base64Flag {
 						vectArr := encodedVectors[j%len(encodedVectors)]
-						go internal.UpdateDocumentsXattrbase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
+						go internal.UpsertXattrBase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr,j+1,provideDefaultDocs)
 					} else {
 						vectArr := vectors[j%len(vectors)]
-						go internal.UpdateDocumentsXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
+						go internal.UpsertXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
 					}
 				} else {
 					if base64Flag {
 						vectArr := encodedVectors[j%len(encodedVectors)]
-						go internal.UpdateDocumentsXattrbase64field(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr)
+						go internal.UpsertBase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr,j+1,provideDefaultDocs)
 					} else {
 						vectArr := vectors[j%len(vectors)]
-						go internal.UpdateDocumentsField(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1)
+						go internal.UpsertVectors(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1,provideDefaultDocs)
 					}
 				}
 
