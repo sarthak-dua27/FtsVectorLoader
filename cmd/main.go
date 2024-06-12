@@ -64,7 +64,7 @@ func main() {
 	flag.BoolVar(&upsertFlag, "upsertFlag", false, "")
 	flag.BoolVar(&deleteFlag, "deleteFlag", false, "")
 	flag.IntVar(&numQueries, "numQueries", 0, "flag to run queries")
-	flag.IntVar(&duration, "duration", 5, "duration to run queries")
+	flag.IntVar(&duration, "duration", 1, "duration to run queries")
 	flag.StringVar(&indexName, "indexName", "", "index name to run queires on")
 
 	flag.Parse()
@@ -150,7 +150,7 @@ func main() {
 				if xattrFlag {
 					if base64Flag {
 						vectArr := encodedVectors[j%len(encodedVectors)]
-						go internal.UpsertXattrBase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr,j+1,provideDefaultDocs)
+						go internal.UpsertXattrBase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
 					} else {
 						vectArr := vectors[j%len(vectors)]
 						go internal.UpsertXattr(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
@@ -158,10 +158,10 @@ func main() {
 				} else {
 					if base64Flag {
 						vectArr := encodedVectors[j%len(encodedVectors)]
-						go internal.UpsertBase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr,j+1,provideDefaultDocs)
+						go internal.UpsertBase64(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
 					} else {
 						vectArr := vectors[j%len(vectors)]
-						go internal.UpsertVectors(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1,provideDefaultDocs)
+						go internal.UpsertVectors(&wg, collection, fmt.Sprintf("%s%d", documentIdPrefix, j+1), vectArr, j+1, provideDefaultDocs)
 					}
 				}
 

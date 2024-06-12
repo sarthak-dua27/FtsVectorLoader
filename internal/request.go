@@ -35,7 +35,7 @@ func (api *APIClient) DoRequest(method, username string, password string, payloa
 
 	if payload != nil {
 		jsonData, err := json.Marshal(payload)
-
+		//fmt.Println(string(jsonData))
 		if err != nil {
 			return nil, fmt.Errorf("error marshalling payload: %v", err)
 		}

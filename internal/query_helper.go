@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+var Passcount int
+var Failcount int
+var Totalcount int
+
 func callAPI(username string, password string, url string, payload map[string]interface{}) (map[string]interface{}, error) {
 	//fmt.Printf("Executing query on url %s with payload %v", url, payload)
 	apiClient := NewAPIClient(url)
@@ -46,8 +50,15 @@ func resolveAndGetSearchNode(nodeAddress string, capella bool) string {
 }
 
 func SimulateQuery(nodeAddress string, indexName string, vector []float32, username string, password string, xattr bool, base64 bool, capella bool) {
-	urls := getSearchNodes(nodeAddress)
-	url := fmt.Sprintf("https://%s:18094/api/index/%s/query", urls[rand.Intn(len(urls))], indexName)
+	var url string
+	if capella {
+		urls := getSearchNodes(nodeAddress)
+		url = fmt.Sprintf("https://%s:18094/api/index/%s/query", urls[rand.Intn(len(urls))], indexName)
+	} else {
+		//nodes := []string{"172.23.105.122", "172.23.106.171", "172.23.106.30", "172.23.97.108", "172.23.97.109"}
+		//url = fmt.Sprintf("http://%s:8094/api/index/%s/query", nodes[rand.Intn(len(nodes))], indexName)
+		url = fmt.Sprintf("http://%s:8094/api/index/%s/query", nodeAddress, indexName)
+	}
 	var field = "vector_data"
 	if xattr {
 		field = "_$xattrs.vector_data"
@@ -72,12 +83,15 @@ func SimulateQuery(nodeAddress string, indexName string, vector []float32, usern
 	}
 
 	result, err := callAPI(username, password, url, payload)
+	Totalcount++
 	if err != nil {
 		fmt.Printf("Error running query %v\n", err)
 	}
 	if result["status"] == "fail" {
 		fmt.Println(result)
+		Failcount++
 	} else {
+		Passcount++
 		fmt.Println(result["status"], "Total Hits:", result["total_hits"])
 	}
 
@@ -151,5 +165,6 @@ func RunQueriesPerSecond(nodeAddress string, indexName string, vector [][]float3
 
 	}
 	wg.Wait()
+	fmt.Println(fmt.Sprintf("Totalcount %d Passcount %d Failcount %d", Totalcount, Passcount, Failcount))
 
 }
