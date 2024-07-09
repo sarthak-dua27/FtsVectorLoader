@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"github.com/couchbase/gocb/v2"
 	"github.com/go-faker/faker/v4"
 	"log"
@@ -55,7 +54,7 @@ func UpsertXattr(waitGroup *sync.WaitGroup, collection *gocb.Collection, documen
 				log.Print("Upsert operation failed. Retrying.\n")
 				counter++
 			} else {
-				log.Printf("Document ID %v upsert successful. Xattr - True, Base64 - False\n", documentID)
+				// log.Printf("Document ID %v upsert successful. Xattr - True, Base64 - False\n", documentID)
 				break
 			}
 		}
@@ -87,7 +86,7 @@ func UpsertVectors(waitGroup *sync.WaitGroup, collection *gocb.Collection, docum
 				log.Print("Default Doc creation error. Retrying.\n")
 				counter++
 			} else {
-				fmt.Printf("Document ID %v upsert successful. Xattr - False, Base64 - False\n", documentID)
+				// fmt.Printf("Document ID %v upsert successful. Xattr - False, Base64 - False\n", documentID)
 				break
 			}
 		}
@@ -109,7 +108,7 @@ func UpsertVectors(waitGroup *sync.WaitGroup, collection *gocb.Collection, docum
 					log.Print("Upsert operation failed. Retrying.\n")
 					counter++
 				} else {
-					log.Printf("Document ID %v upsert successful. Xattr - False, Base64 - False\n", documentID)
+					// log.Printf("Document ID %v upsert successful. Xattr - False, Base64 - False\n", documentID)
 					break
 				}
 			}
@@ -166,7 +165,7 @@ func UpsertXattrBase64(waitGroup *sync.WaitGroup, collection *gocb.Collection, d
 				log.Print("Upsert operation failed. Retrying.\n")
 				counter++
 			} else {
-				log.Printf("Document ID %v upsert successful. Xattr - True, Base64 - True\n", documentID)
+				// log.Printf("Document ID %v upsert successful. Xattr - True, Base64 - True\n", documentID)
 				break
 			}
 		}
@@ -219,7 +218,7 @@ func UpsertBase64(waitGroup *sync.WaitGroup, collection *gocb.Collection, docume
 				log.Print("Upsert operation failed. Retrying.\n")
 				counter++
 			} else {
-				log.Printf("Document ID %v upsert successful. Xattr - False, Base64 - True\n", documentID)
+				// log.Printf("Document ID %v upsert successful. Xattr - False, Base64 - True\n", documentID)
 				break
 			}
 		}
